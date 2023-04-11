@@ -5,26 +5,34 @@ import yaml
 import os
 import logging
 import logging.config
+import coloredlogs
 
 from app.api.v1.api import api_router
 from app.core.config import settings
 
 # Logging
-def replace_env_for_config(log_conf: dict) -> None:
-    for k, v in log_conf.items():
-        if isinstance(v, dict):
-            replace_env_for_config(v)
-        elif isinstance(v, str) and v[0] == '$':
-            log_conf[k] = os.environ.get(v[1:])
+def setup_logging(default_path='logging.yaml', default_level=logging.INFO, env_key='LOG_CFG'):
+    path = default_path
+    value = os.getenv(env_key, None)
+    if value:
+        path = value
+    if os.path.exists(path):
+        with open(path, 'rt') as f:
+            try:
+                config = yaml.safe_load(f.read())
+                logging.config.dictConfig(config)
+                coloredlogs.install()
+            except Exception as e:
+                print(e)
+                print('Error in Logging Configuration. Using default configs')
+                logging.basicConfig(level=default_level)
+                coloredlogs.install(level=default_level)
+    else:
+        logging.basicConfig(level=default_level)
+        coloredlogs.install(level=default_level)
+        print('Failed to load configuration file. Using default configs')
 
-def create_log_config(log_path: str) -> dict:
-    with open(log_path, 'r') as f:
-        log_config = yaml.load(f, Loader=yaml.CLoader)
-        replace_env_for_config(log_config)
-    return log_config
-
-log_config = create_log_config('app/conf/logging.yaml')
-logging.config.dictConfig(log_config)
+log_config = setup_logging(default_path='app/conf/logging.yaml')
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
